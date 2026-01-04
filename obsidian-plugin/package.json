@@ -1,0 +1,42 @@
+{
+    "name": "panorama-calendar",
+    "version": "1.0.0",
+    "description": "A panoramic, annual linear calendar with cyclical planning views.",
+    "main": "main.js",
+    "scripts": {
+        "dev": "node esbuild.config.mjs",
+        "build:css": "postcss src/styles.css -o styles.css",
+        "build": "npm run build:css && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && mkdir -p dist && cp main.js manifest.json styles.css dist/",
+        "version": "node version-bump.mjs && git add manifest.json versions.json"
+    },
+    "keywords": [
+        "obsidian",
+        "obsidian-plugin"
+    ],
+    "author": "Alexander VanEck",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^16.11.6",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
+        "@typescript-eslint/eslint-plugin": "5.29.0",
+        "@typescript-eslint/parser": "5.29.0",
+        "builtin-modules": "3.3.0",
+        "esbuild": "0.19.11",
+        "obsidian": "latest",
+        "tslib": "2.4.0",
+        "typescript": "4.7.4",
+        "autoprefixer": "^10.4.14",
+        "postcss": "^8.4.21",
+        "postcss-cli": "^10.1.0",
+        "tailwindcss": "^3.3.1"
+    },
+    "dependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "clsx": "^1.2.1",
+        "ical.js": "^2.0.1",
+        "lucide-react": "^0.263.1",
+        "date-fns": "^2.30.0"
+    }
+}
