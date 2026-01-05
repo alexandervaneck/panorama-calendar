@@ -1,6 +1,6 @@
 
 import { fetchAndParseIcal } from './ical';
-import { fetchCalendars } from './calendars';
+import type { CalendarInfo } from './calendars';
 
 export type CalendarEvent = {
   id: string;
@@ -25,21 +25,17 @@ type CachedYear = {
   cachedAt: number;
 };
 
-function normalizeCalendars(calendars?: string[]) {
-  const list = Array.isArray(calendars) ? calendars.filter(Boolean) : [];
-  return Array.from(new Set(list)).sort();
+function normalizeCalendars(calendars: CalendarInfo[]) {
+  return calendars.map(c => c.id).sort();
 }
 
-function cacheKey(year: number, calendars: string[]) {
-  // Use a hash or just join the URLs. Since URLs are long, maybe just use a simple join if not too many.
-  // For safety/length, we might want to hash, but for MVP local storage, string join is probably fine if not huge.
+function cacheKey(year: number, calendars: CalendarInfo[]) {
   const normalized = normalizeCalendars(calendars);
-  // Simple "checksum"
   const calKey = normalized.length ? normalized.length + '-' + normalized.map(s => s.slice(-10)).join('') : 'none';
   return `${CACHE_VERSION}-events-year-${year}-${calKey}`;
 }
 
-export function loadCachedYear(year: number, calendars: string[]): CalendarEvent[] | null {
+export function loadCachedYear(year: number, calendars: CalendarInfo[]): CalendarEvent[] | null {
   try {
     const raw = localStorage.getItem(cacheKey(year, calendars));
     if (!raw) return null;
@@ -51,7 +47,7 @@ export function loadCachedYear(year: number, calendars: string[]): CalendarEvent
   }
 }
 
-export function cacheYear(year: number, calendars: string[], events: CalendarEvent[]) {
+export function cacheYear(year: number, calendars: CalendarInfo[], events: CalendarEvent[]) {
   try {
     const payload: CachedYear = { events, cachedAt: Date.now() };
     localStorage.setItem(cacheKey(year, calendars), JSON.stringify(payload));
@@ -60,7 +56,7 @@ export function cacheYear(year: number, calendars: string[], events: CalendarEve
   }
 }
 
-export function clearYearCache(year: number, calendars: string[]) {
+export function clearYearCache(year: number, calendars: CalendarInfo[]) {
   try {
     localStorage.removeItem(cacheKey(year, calendars));
   } catch {
@@ -78,26 +74,15 @@ export function clearAllEventCaches() {
   }
 }
 
-export async function fetchYearEvents(year: number, calendarIds: string[]): Promise<CalendarEvent[]> {
-  // In our new model, calendarIds ARE the URLs.
-  // However, we need the calendar metadata (color, title) to hydration.
-  // So we fetch all known calendars and find the ones matching the IDs (URLs).
-
-  const allCalendars = await fetchCalendars();
-  const targetedCalendars = allCalendars.filter(c => calendarIds.includes(c.id));
-
-  if (targetedCalendars.length === 0) return [];
+export async function fetchYearEvents(year: number, calendars: CalendarInfo[]): Promise<CalendarEvent[]> {
+  if (calendars.length === 0) return [];
 
   let allEvents: CalendarEvent[] = [];
 
   // Parallel fetch
-  const promises = targetedCalendars.map(async (cal) => {
+  const promises = calendars.map(async (cal) => {
     try {
       const events = await fetchAndParseIcal(cal.url, cal.id, cal.title, cal.color);
-      // Filter by year if necessary? 
-      // ical.js usually returns all events. We should filter them here to optimize rendering
-      // and ensure we only cache/return relevant year's events if strictly needed, 
-      // but the UI filters too. Let's filter slightly to reduce memory.
 
       return events.filter(e => {
         const s = new Date(e.start);

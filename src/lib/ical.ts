@@ -1,19 +1,16 @@
-
 import ICAL from 'ical.js';
+import { requestUrl } from 'obsidian';
 import type { CalendarEvent } from './events';
-
-
 
 export async function fetchCalendarMetadata(url: string): Promise<{ title: string | null }> {
   try {
-    let fetchUrl = url;
-    if (url.includes('calendar.google.com')) {
-      fetchUrl = url.replace('https://calendar.google.com', '/google-calendar');
-    }
+    // Obsidian's requestUrl handles CORS, so we use the URL directly.
+    const response = await requestUrl({ url });
 
-    const response = await fetch(fetchUrl);
-    if (!response.ok) throw new Error('Failed to fetch');
-    const text = await response.text();
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Failed to fetch: ${response.status}`);
+    }
+    const text = response.text;
 
     const jcalData = ICAL.parse(text);
     const comp = new ICAL.Component(jcalData);
@@ -29,21 +26,14 @@ export async function fetchCalendarMetadata(url: string): Promise<{ title: strin
 
 export async function fetchAndParseIcal(url: string, calendarId: string, calendarTitle: string, color: string): Promise<CalendarEvent[]> {
   try {
-    let fetchUrl = url;
+    // Obsidian's requestUrl handles CORS, so we use the URL directly.
+    const response = await requestUrl({ url });
 
-    // Use local Vite proxy for Google Calendar URLs to avoid CORS
-    if (url.includes('calendar.google.com')) {
-      fetchUrl = url.replace('https://calendar.google.com', '/google-calendar');
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Failed to fetch iCal data: ${response.status}`);
     }
 
-    const response = await fetch(fetchUrl);
-
-    if (!response.ok) {
-      // Fallback or retry?
-      throw new Error(`Failed to fetch iCal data: ${response.statusText}`);
-    }
-
-    const iCalData = await response.text();
+    const iCalData = response.text;
 
     // Basic validation
     if (!iCalData.includes('BEGIN:VCALENDAR')) {
@@ -79,9 +69,6 @@ export async function fetchAndParseIcal(url: string, calendarId: string, calenda
       const startJsDate = start.toJSDate();
       const endJsDate = end.toJSDate();
 
-      // If no end date, assume 1 hour duration or same day depending on context, 
-      // but ical.js usually handles duration to end date conversion.
-
       return {
         id: uid,
         calendarId,
@@ -98,8 +85,6 @@ export async function fetchAndParseIcal(url: string, calendarId: string, calenda
     });
   } catch (err) {
     console.error('Error parsing iCal:', err);
-    // Return empty array or rethrow depending on desired failure mode. 
-    // For now, let's return minimal error object or empty.
     throw err;
   }
 }

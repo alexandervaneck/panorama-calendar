@@ -1,10 +1,10 @@
 {
-    "id": "annual-linear-calendar",
+    "id": "panorama-calendar",
     "name": "Panorama Calendar",
     "version": "1.0.0",
     "minAppVersion": "0.15.0",
-    "description": "A panoramic, annual linear calendar with cyclical planning views.",
-    "author": "Alexander VanEck",
+    "description": "A linear calendar view for .ical calendars.",
+    "author": "Alexander van Eck",
     "authorUrl": "https://github.com/alexandervaneck",
     "isDesktopOnly": false
 }

@@ -9,26 +9,22 @@ import {
   clearYearCache,
   type CalendarEvent,
 } from './lib/events';
-import { fetchCalendars, addCalendar, type CalendarInfo } from './lib/calendars';
+import { createCalendar, type CalendarInfo } from './lib/calendars';
 import { ViewMode } from './lib/date';
 import { useOutsideClick } from './hooks/useOutsideClick';
+import type AnnualLinearCalendarPlugin from '../main';
 
 const currentYear = new Date().getFullYear();
 const currentMonthIndex = new Date().getMonth();
-const YEAR_KEY = 'selected_year';
-const CALENDARS_KEY = 'selected_calendars';
 
-const VIEW_MODE_KEY = 'view_mode';
+export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | undefined }) {
+  // Initialize state from plugin settings or defaults
+  // If plugin is undefined (e.g. dev outside obsidian), fallback to defaults.
+  const [year, setYear] = useState(plugin?.settings?.year ?? currentYear);
+  const [viewMode, setViewMode] = useState<ViewMode>(plugin?.settings?.viewMode ?? 'date-grid');
+  const [calendars, setCalendars] = useState<CalendarInfo[]>(plugin?.settings?.calendars ?? []);
+  const [selectedCalendars, setSelectedCalendars] = useState<string[]>(plugin?.settings?.selectedCalendars ?? []);
 
-export default function App() {
-  const [year, setYear] = useState(() => {
-    const stored = Number(localStorage.getItem(YEAR_KEY));
-    return Number.isFinite(stored) ? stored : currentYear;
-  });
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const stored = localStorage.getItem(VIEW_MODE_KEY);
-    return stored === 'fixed-week' ? 'fixed-week' : 'date-grid';
-  });
   const weekStart = 0; // Sunday
   const [scrollTargetMonth, setScrollTargetMonth] = useState<number | null>(null);
 
@@ -40,30 +36,33 @@ export default function App() {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [calendarMenuOpen, setCalendarMenuOpen] = useState(false);
-  const [calendars, setCalendars] = useState<CalendarInfo[]>([]);
   const [calendarsLoading, setCalendarsLoading] = useState(false);
-  const [selectedCalendars, setSelectedCalendars] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem(CALENDARS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return Array.from(new Set(parsed.filter((id: unknown) => typeof id === 'string' && id.trim()))); // unique, non-empty
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return [];
-  });
 
-  // We no longer have a "hardcoded" primary ID from a backend. 
-  // If no calendars are selected but we have calendars, we might default to all or first.
+  // Sync state changes to plugin settings
+  const persistSettings = async (updates: Partial<{
+    year: number;
+    viewMode: ViewMode;
+    calendars: CalendarInfo[];
+    selectedCalendars: string[];
+  }>) => {
+    if (!plugin) return;
+
+    plugin.settings = {
+      ...plugin.settings,
+      ...updates
+    };
+    await plugin.saveSettings();
+  };
+
 
   const activeCalendars = useMemo(
     () => selectedCalendars,
     [selectedCalendars],
   );
+
+  const activeCalendarInfos = useMemo(() => {
+    return calendars.filter(c => selectedCalendars.includes(c.id));
+  }, [calendars, selectedCalendars]);
 
   // Key now depends on selected ID (URLs)
   const selectionKey = `${year}-${activeCalendars.slice().sort().join(',')}`;
@@ -74,35 +73,28 @@ export default function App() {
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, []);
 
+  // Subscribe to plugin setting changes
+  useEffect(() => {
+    if (!plugin) return;
+    const cleanup = plugin.onSettingsUpdate(() => {
+      setYear(plugin.settings.year);
+      setViewMode(plugin.settings.viewMode);
+      setCalendars(plugin.settings.calendars);
+      // Ensure selected calendars are also synced if they change externally (e.g. deletion)
+      setSelectedCalendars(plugin.settings.selectedCalendars);
+    });
+    return cleanup;
+  }, [plugin]);
+
   const handleToday = () => {
     if (year !== currentYear) {
       setYear(currentYear);
-      localStorage.setItem(YEAR_KEY, String(currentYear));
+      persistSettings({ year: currentYear });
     }
     setScrollTargetMonth(currentMonthIndex);
   };
 
-  const handleAddCalendar = async () => {
-    // PROMPT FOR MVP
-    const url = window.prompt("Enter iCal URL (must have CORS enabled or be proxied):", "");
-    if (url) {
-      try {
-        const newCal = await addCalendar(url.trim());
-        const updatedList = await fetchCalendars();
-        setCalendars(updatedList);
-        // Select the new calendar by default
-        setSelectedCalendars(prev => {
-          const next = [...prev, newCal.id];
-          localStorage.setItem(CALENDARS_KEY, JSON.stringify(next));
-          return next;
-        });
-        alert("Calendar added!");
-      } catch (e) {
-        console.error(e);
-        alert("Failed to add calendar. Check console.");
-      }
-    }
-  };
+  // Removed handleAddCalendar and handleRemoveCalendar as they are now in Settings Tab
 
   useEffect(() => {
     if (scrollTargetMonth === null) return;
@@ -124,21 +116,6 @@ export default function App() {
     }, 220); // slightly longer than the CSS transition
     return () => window.clearTimeout(timer);
   }, [selectedEvent, panelEvent]);
-
-  // Initial Calendar Load
-  useEffect(() => {
-    setCalendarsLoading(true);
-    fetchCalendars().then(list => {
-      setCalendars(list);
-      // If we have calendars but none selected, select all? or first?
-      // If no selected calendars and list is not empty, select all
-      if (selectedCalendars.length === 0 && list.length > 0) {
-        const allIds = list.map(c => c.id);
-        setSelectedCalendars(allIds);
-        localStorage.setItem(CALENDARS_KEY, JSON.stringify(allIds));
-      }
-    }).finally(() => setCalendarsLoading(false));
-  }, []);
 
 
   useEffect(() => {
@@ -177,7 +154,7 @@ export default function App() {
     }
 
     const existing = eventsByYear[selectionKey];
-    const cached = loadCachedYear(year, activeCalendars);
+    const cached = loadCachedYear(year, activeCalendarInfos);
 
     if (existing) {
       setEventsLoading(false);
@@ -192,10 +169,10 @@ export default function App() {
 
     let canceled = false;
     setEventsLoading(true);
-    fetchYearEvents(year, activeCalendars)
+    fetchYearEvents(year, activeCalendarInfos)
       .then((events) => {
         if (canceled) return;
-        cacheYear(year, activeCalendars, events);
+        cacheYear(year, activeCalendarInfos, events);
         setEventsByYear((prev) => ({ ...prev, [selectionKey]: events }));
         setLastSync(new Date().toISOString());
       })
@@ -208,13 +185,10 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [year, selectedCalendars, activeCalendars, selectionKey]);
+  }, [year, activeCalendars, selectionKey, activeCalendarInfos]);
 
 
-  const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode);
-    localStorage.setItem(VIEW_MODE_KEY, mode);
-  };
+
 
   const displayedEvents = useMemo(() => {
     const list = eventsByYear[selectionKey] ?? [];
@@ -244,10 +218,6 @@ export default function App() {
   // Close panel when clicking outside.
   useOutsideClick([panelRef], () => setSelectedEvent(null), { enabled: !!panelEvent });
 
-  const handleSignOut = async () => {
-    // No-op for now as we removed auth, but we could clear local calendars if we wanted "Reset"
-  };
-
   return (
     <div className="min-h-screen bg-surface-50 text-slate-900">
       <TopNav
@@ -255,74 +225,39 @@ export default function App() {
         availableYears={yearOptions}
         onYearChange={(y) => {
           setYear(y);
-          localStorage.setItem(YEAR_KEY, String(y));
+          persistSettings({ year: y });
         }}
-        viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
+
         onToday={handleToday}
         todayYear={currentYear}
 
-        onAddCalendar={handleAddCalendar}
-        onRemoveCalendar={async (id) => {
-          const { removeCalendar } = await import('./lib/calendars');
-          await removeCalendar(id);
-          const list = await fetchCalendars();
-          setCalendars(list);
-
-          // If removed calendar was selected, deselect it
-          setSelectedCalendars(prev => {
-            const next = prev.filter(c => c !== id);
-            localStorage.setItem(CALENDARS_KEY, JSON.stringify(next));
-            return next;
-          });
-        }}
         calendars={calendars}
 
         selectedCalendars={selectedCalendars}
         calendarsLoading={calendarsLoading}
         calendarMenuOpen={calendarMenuOpen}
-        onToggleCalendarMenu={async () => {
-          setCalendarMenuOpen((open) => !open);
-          // Refresh calendars check?
-          const list = await fetchCalendars();
-          setCalendars(list);
-        }}
+        onToggleCalendarMenu={() => setCalendarMenuOpen((open) => !open)}
+
         onToggleCalendar={(id) => {
           setSelectedCalendars((prev) => {
             const exists = prev.includes(id);
+            let next: string[];
             if (exists) {
-              const next = prev.filter((c) => c !== id);
-              try {
-                localStorage.setItem(CALENDARS_KEY, JSON.stringify(next));
-              } catch {
-                // ignore
-              }
-              return next;
+              next = prev.filter((c) => c !== id);
+            } else {
+              next = [...prev, id];
             }
-            const updated = [...prev, id];
-            try {
-              localStorage.setItem(CALENDARS_KEY, JSON.stringify(updated));
-            } catch {
-              // ignore
-            }
-            return updated;
+            persistSettings({ selectedCalendars: next });
+            return next;
           });
         }}
         onSync={async () => {
-          try {
-            setCalendarsLoading(true);
-            const list = await fetchCalendars();
-            setCalendars(list);
-          } catch (error) {
-            console.error('Failed to refresh calendars', error);
-          } finally {
-            setCalendarsLoading(false);
-          }
-          clearYearCache(year, activeCalendars);
+          // Simplified sync - just refetch events since calendars are local now
+          clearYearCache(year, activeCalendarInfos);
           setEventsLoading(true);
-          fetchYearEvents(year, activeCalendars)
+          fetchYearEvents(year, activeCalendarInfos)
             .then((events) => {
-              cacheYear(year, activeCalendars, events);
+              cacheYear(year, activeCalendarInfos, events);
               setEventsByYear((prev) => ({ ...prev, [selectionKey]: events }));
               setLastSync(new Date().toISOString());
             })
@@ -331,6 +266,7 @@ export default function App() {
               setEventsLoading(false);
             });
         }}
+        onOpenSettings={() => plugin?.openSettings()}
         isSyncing={eventsLoading}
         calendarMenuRef={calendarMenuRef}
         calendarButtonRef={calendarButtonRef}

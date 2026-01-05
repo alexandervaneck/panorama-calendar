@@ -7,10 +7,11 @@ export type CalendarInfo = {
   primary?: boolean;
 };
 
-const CALENDARS_STORAGE_KEY = 'panorama_custom_calendars';
+
+
 
 // Default Colors
-const COLORS = [
+export const CALENDAR_COLORS = [
   '#0EA5E9', // Sky 500
   '#F43F5E', // Rose 500
   '#8B5CF6', // Violet 500
@@ -19,24 +20,12 @@ const COLORS = [
   '#EC4899', // Pink 500
 ];
 
-function getRandomColor() {
-  return COLORS[Math.floor(Math.random() * COLORS.length)];
+export function getRandomColor() {
+  return CALENDAR_COLORS[Math.floor(Math.random() * CALENDAR_COLORS.length)];
 }
 
-export async function fetchCalendars(): Promise<CalendarInfo[]> {
-  try {
-    const raw = localStorage.getItem(CALENDARS_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as CalendarInfo[];
-  } catch {
-    return [];
-  }
-}
-
-
-export async function addCalendar(url: string, title?: string): Promise<CalendarInfo> {
-  const current = await fetchCalendars();
-  if (current.some(c => c.url === url)) {
+export async function createCalendar(url: string, existingCalendars: CalendarInfo[], title?: string): Promise<CalendarInfo> {
+  if (existingCalendars.some(c => c.url === url)) {
     throw new Error('Calendar already exists');
   }
 
@@ -55,23 +44,12 @@ export async function addCalendar(url: string, title?: string): Promise<Calendar
     }
   }
 
-  const newCal: CalendarInfo = {
+  return {
     id: url, // Use URL as ID for simplicity
     url,
     title: finalTitle,
     color: getRandomColor(),
-    primary: current.length === 0
+    primary: existingCalendars.length === 0
   };
-
-  const updated = [...current, newCal];
-  localStorage.setItem(CALENDARS_STORAGE_KEY, JSON.stringify(updated));
-  return newCal;
-}
-
-
-export async function removeCalendar(id: string): Promise<void> {
-  const current = await fetchCalendars();
-  const updated = current.filter(c => c.id !== id);
-  localStorage.setItem(CALENDARS_STORAGE_KEY, JSON.stringify(updated));
 }
 

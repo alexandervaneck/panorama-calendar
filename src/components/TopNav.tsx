@@ -6,12 +6,9 @@ type TopNavProps = {
   year: number;
   availableYears: number[];
   onYearChange: (year: number) => void;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
+
   onToday: () => void;
   todayYear: number;
-  onAddCalendar: () => void;
-  onRemoveCalendar: (id: string) => void;
   onSync?: () => void;
   isSyncing?: boolean;
   calendars: { id: string; title: string; color?: string | null; primary?: boolean; url?: string }[];
@@ -22,24 +19,17 @@ type TopNavProps = {
   onToggleCalendar?: (id: string) => void;
   calendarMenuRef?: RefObject<HTMLDivElement>;
   calendarButtonRef?: RefObject<HTMLButtonElement>;
+  onOpenSettings: () => void;
 };
 
-const viewLabels: Record<ViewMode, string> = {
-  'date-grid': 'Date Grid',
-  'fixed-week': 'Fixed Week',
-  'cyclical': 'Cyclical',
-};
 
 export function TopNav({
   year,
   availableYears,
   onYearChange,
-  viewMode,
-  onViewModeChange,
+
   onToday,
   todayYear,
-  onAddCalendar,
-  onRemoveCalendar,
   onSync,
   isSyncing,
   calendars,
@@ -50,6 +40,7 @@ export function TopNav({
   onToggleCalendar,
   calendarMenuRef,
   calendarButtonRef,
+  onOpenSettings,
 }: TopNavProps) {
   return (
     <header
@@ -59,8 +50,11 @@ export function TopNav({
       <div className="mx-auto flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 overflow-hidden rounded-xl bg-sky-500">
-              <img src="/favicon.png" alt="Panorama Calendar" className="h-full w-full object-cover" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                <path d="M6 4H4v16h2M18 4h2v16h-2" />
+                <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+              </svg>
             </div>
             <div>
               <div className="text-xs uppercase tracking-wide text-slate-500">Panorama Calendar</div>
@@ -71,7 +65,7 @@ export function TopNav({
           <div className="flex items-center rounded-lg border border-slate-200 bg-white shadow-sm">
             <button
               onClick={() => onYearChange(year - 1)}
-              className="p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-l-lg"
+              className="px-3 py-2 text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-r border-slate-200"
               title="Previous year"
               aria-label="Previous year"
             >
@@ -79,12 +73,12 @@ export function TopNav({
                 <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             </button>
-            <span className="px-2 text-sm font-semibold text-slate-900 min-w-[3rem] text-center">
+            <span className="px-3 py-2 text-sm font-semibold text-slate-900 min-w-[3.5rem] text-center flex items-center justify-center">
               {year}
             </span>
             <button
               onClick={() => onYearChange(year + 1)}
-              className="p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-r-lg"
+              className="px-3 py-2 text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-l border-slate-200"
               title="Next year"
               aria-label="Next year"
             >
@@ -96,7 +90,7 @@ export function TopNav({
 
           <button
             type="button"
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-300 hover:text-slate-900"
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300"
             title={`Go to ${todayYear} and scroll to today`}
             onClick={onToday}
           >
@@ -108,7 +102,7 @@ export function TopNav({
           <div className="relative">
             <button
               type="button"
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-300 hover:text-slate-900"
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300"
               onClick={onToggleCalendarMenu}
               data-calendars-button
               ref={calendarButtonRef}
@@ -123,12 +117,6 @@ export function TopNav({
               >
                 <div className="p-3 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">My Calendars</span>
-                  <button
-                    onClick={onAddCalendar}
-                    className="text-xs font-medium text-sky-600 hover:text-sky-700 hover:underline"
-                  >
-                    + Add URL
-                  </button>
                 </div>
                 <div className="max-h-64 overflow-auto">
                   {calendarsLoading ? (
@@ -154,23 +142,7 @@ export function TopNav({
                           />
                           <span className="truncate flex-1" title={cal.url || cal.title}>{cal.title}</span>
                         </label>
-                        <button
-                          type="button"
-                          className="ml-2 hidden p-1 text-slate-400 hover:text-red-600 group-hover:block"
-                          aria-label="Remove calendar"
-                          title="Remove calendar"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm(`Remove calendar "${cal.title}"?`)) {
-                              onRemoveCalendar(cal.id);
-                            }
-                          }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                          </svg>
-                        </button>
+
                       </div>
                     ))
                   )}
@@ -179,34 +151,19 @@ export function TopNav({
             )}
           </div>
 
-          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-sm shadow-inner">
-            {(Object.keys(viewLabels) as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={`rounded-md px-3 py-2 font-medium transition ${viewMode === mode
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                aria-pressed={viewMode === mode}
-                onClick={() => onViewModeChange(mode)}
-              >
-                {viewLabels[mode]}
-              </button>
-            ))}
-          </div>
+
 
           {onSync && (
             <button
               type="button"
-              className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-800 shadow-sm transition hover:border-sky-300 hover:text-slate-900 disabled:opacity-60"
+              className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 disabled:opacity-60"
               title="Refresh events"
               onClick={onSync}
               aria-label="Refresh events"
               disabled={isSyncing}
             >
               <svg
-                className={`h-3 w-3 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`}
+                className={`h-4 w-4 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -222,6 +179,28 @@ export function TopNav({
               </svg>
             </button>
           )}
+
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300"
+            title="Open settings"
+            onClick={onOpenSettings}
+            aria-label="Open settings"
+          >
+            <svg
+              className="h-4 w-4 text-slate-500"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
 
 
         </div>
