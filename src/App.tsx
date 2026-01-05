@@ -4,7 +4,7 @@ import { CalendarGrid } from './components/CalendarGrid';
 import { TopNav } from './components/TopNav';
 import {
   cacheYear,
-  fetchYearEvents,
+  fetchCalendarYearEvents,
   loadCachedYear,
   clearYearCache,
   type CalendarEvent,
@@ -64,8 +64,7 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
     return calendars.filter(c => selectedCalendars.includes(c.id));
   }, [calendars, selectedCalendars]);
 
-  // Key now depends on selected ID (URLs)
-  const selectionKey = `${year}-${activeCalendars.slice().sort().join(',')}`;
+
 
   const yearOptions = useMemo(() => {
     const start = currentYear - 5;
@@ -79,9 +78,9 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
     const cleanup = plugin.onSettingsUpdate(() => {
       setYear(plugin.settings.year);
       setViewMode(plugin.settings.viewMode);
-      setCalendars(plugin.settings.calendars);
+      setCalendars([...plugin.settings.calendars]);
       // Ensure selected calendars are also synced if they change externally (e.g. deletion)
-      setSelectedCalendars(plugin.settings.selectedCalendars);
+      setSelectedCalendars([...plugin.settings.selectedCalendars]);
     });
     return cleanup;
   }, [plugin]);
@@ -148,53 +147,72 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
 
   useEffect(() => {
     // If active calendars changed, we might need to fetch.
-    if (activeCalendars.length === 0) {
-      setEventsByYear(prev => ({ ...prev, [selectionKey]: [] }));
-      return;
-    }
-
-    const existing = eventsByYear[selectionKey];
-    const cached = loadCachedYear(year, activeCalendarInfos);
-
-    if (existing) {
-      setEventsLoading(false);
-      return;
-    }
-
-    if (cached) {
-      setEventsByYear((prev) => ({ ...prev, [selectionKey]: cached }));
-      setEventsLoading(false);
+    if (activeCalendarInfos.length === 0) {
       return;
     }
 
     let canceled = false;
-    setEventsLoading(true);
-    fetchYearEvents(year, activeCalendarInfos)
-      .then((events) => {
-        if (canceled) return;
-        cacheYear(year, activeCalendarInfos, events);
-        setEventsByYear((prev) => ({ ...prev, [selectionKey]: events }));
-        setLastSync(new Date().toISOString());
-      })
-      .catch((error) => {
-        console.error('Failed to fetch events', error);
-      })
-      .finally(() => {
-        if (!canceled) setEventsLoading(false);
+    const fetchMissing = async () => {
+      setEventsLoading(true);
+
+      const promises = activeCalendarInfos.map(async (cal) => {
+        const cacheId = `${year}-${cal.id}`;
+
+        // 1. Check state
+        if (eventsByYear[cacheId]) return;
+
+        // 2. Check cache
+        const cached = loadCachedYear(year, cal);
+        if (cached) {
+          if (!canceled) {
+            setEventsByYear(prev => ({ ...prev, [cacheId]: cached }));
+          }
+          return;
+        }
+
+        // 3. Fetch
+        try {
+          const events = await fetchCalendarYearEvents(year, cal);
+          if (!canceled) {
+            cacheYear(year, cal, events);
+            setEventsByYear(prev => ({ ...prev, [cacheId]: events }));
+          }
+        } catch (error) {
+          console.error(`Failed to fetch events for ${cal.title}`, error);
+        }
       });
+
+      await Promise.all(promises);
+      if (!canceled) {
+        setEventsLoading(false);
+        setLastSync(new Date().toISOString());
+      }
+    };
+
+    fetchMissing();
+
     return () => {
       canceled = true;
     };
-  }, [year, activeCalendars, selectionKey, activeCalendarInfos]);
+  }, [year, activeCalendarInfos, eventsByYear]);
 
 
 
 
   const displayedEvents = useMemo(() => {
-    const list = eventsByYear[selectionKey] ?? [];
     if (!activeCalendars.length) return [];
-    return list.filter((evt) => activeCalendars.includes(evt.calendarId));
-  }, [eventsByYear, selectionKey, activeCalendars]);
+
+    return activeCalendars.flatMap(id => {
+      const cacheId = `${year}-${id}`;
+      const calInfo = calendars.find(c => c.id === id);
+      const events = eventsByYear[cacheId] || [];
+
+      if (calInfo?.color) {
+        return events.map(e => ({ ...e, color: calInfo.color }));
+      }
+      return events;
+    });
+  }, [eventsByYear, year, activeCalendars, calendars]);
 
   const openPanel = (evt: CalendarEvent) => {
     setPanelEvent(evt);
@@ -252,19 +270,21 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
           });
         }}
         onSync={async () => {
-          // Simplified sync - just refetch events since calendars are local now
-          clearYearCache(year, activeCalendarInfos);
           setEventsLoading(true);
-          fetchYearEvents(year, activeCalendarInfos)
-            .then((events) => {
-              cacheYear(year, activeCalendarInfos, events);
-              setEventsByYear((prev) => ({ ...prev, [selectionKey]: events }));
-              setLastSync(new Date().toISOString());
-            })
-            .catch((error) => console.error('Failed to refresh events', error))
-            .finally(() => {
-              setEventsLoading(false);
-            });
+          const promises = activeCalendarInfos.map(async (cal) => {
+            const cacheId = `${year}-${cal.id}`;
+            clearYearCache(year, cal);
+            try {
+              const events = await fetchCalendarYearEvents(year, cal);
+              cacheYear(year, cal, events);
+              setEventsByYear(prev => ({ ...prev, [cacheId]: events }));
+            } catch (error) {
+              console.error(`Failed to refresh ${cal.title}`, error);
+            }
+          });
+          await Promise.all(promises);
+          setEventsLoading(false);
+          setLastSync(new Date().toISOString());
         }}
         onOpenSettings={() => plugin?.openSettings()}
         isSyncing={eventsLoading}
@@ -370,9 +390,9 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-1 rounded px-2 py-1 font-medium transition-colors hover:bg-sky-100"
-                      aria-label="Open in Google Calendar"
+                      aria-label="View event details"
                     >
-                      <span>See in Google Calendar</span>
+                      <span>View event details</span>
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="15 3 21 3 21 9" />
                         <polyline points="10 14 21 3" />
@@ -416,7 +436,7 @@ function DateRow({ label, value, showTime }: { label: string; value: string; sho
       </svg>
       <input
         type="date"
-        className="flex-1 rounded-lg border border-transparent px-3 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500 disabled:bg-slate-50 disabled:hover:border-transparent"
+        className="flex-1 rounded-lg border border-transparent px-0 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500 disabled:bg-slate-50 disabled:hover:border-transparent"
         value={dateOnly}
         readOnly
         disabled
@@ -424,7 +444,7 @@ function DateRow({ label, value, showTime }: { label: string; value: string; sho
       {showTime && (
         <input
           type="time"
-          className="w-24 rounded-lg border border-transparent px-2 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500 disabled:bg-slate-50 disabled:hover:border-transparent"
+          className="w-24 rounded-lg border border-transparent px-0 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500 disabled:bg-slate-50 disabled:hover:border-transparent"
           value={time}
           readOnly
           disabled

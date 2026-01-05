@@ -95,6 +95,14 @@ export class CalendarSettingTab extends PluginSettingTab {
             name.style.fontWeight = 'bold';
 
             new Setting(div)
+                .addColorPicker(cp => cp
+                    .setValue(calendar.color || '#0ea5e9')
+                    .onChange(async (value) => {
+                        calendar.color = value;
+                        await this.plugin.saveSettings();
+                        // Update the color dot without full refresh
+                        colorDot.style.backgroundColor = value;
+                    }))
                 .addButton(button => button
                     .setButtonText('Remove')
                     .setWarning()

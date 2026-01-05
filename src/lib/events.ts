@@ -29,15 +29,13 @@ function normalizeCalendars(calendars: CalendarInfo[]) {
   return calendars.map(c => c.id).sort();
 }
 
-function cacheKey(year: number, calendars: CalendarInfo[]) {
-  const normalized = normalizeCalendars(calendars);
-  const calKey = normalized.length ? normalized.length + '-' + normalized.map(s => s.slice(-10)).join('') : 'none';
-  return `${CACHE_VERSION}-events-year-${year}-${calKey}`;
+function cacheKey(year: number, calendar: CalendarInfo) {
+  return `${CACHE_VERSION}-events-year-${year}-${calendar.id}`;
 }
 
-export function loadCachedYear(year: number, calendars: CalendarInfo[]): CalendarEvent[] | null {
+export function loadCachedYear(year: number, calendar: CalendarInfo): CalendarEvent[] | null {
   try {
-    const raw = localStorage.getItem(cacheKey(year, calendars));
+    const raw = localStorage.getItem(cacheKey(year, calendar));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedYear;
     if (Date.now() - parsed.cachedAt > CACHE_TTL_MS) return null;
@@ -47,18 +45,18 @@ export function loadCachedYear(year: number, calendars: CalendarInfo[]): Calenda
   }
 }
 
-export function cacheYear(year: number, calendars: CalendarInfo[], events: CalendarEvent[]) {
+export function cacheYear(year: number, calendar: CalendarInfo, events: CalendarEvent[]) {
   try {
     const payload: CachedYear = { events, cachedAt: Date.now() };
-    localStorage.setItem(cacheKey(year, calendars), JSON.stringify(payload));
+    localStorage.setItem(cacheKey(year, calendar), JSON.stringify(payload));
   } catch {
     // ignore
   }
 }
 
-export function clearYearCache(year: number, calendars: CalendarInfo[]) {
+export function clearYearCache(year: number, calendar: CalendarInfo) {
   try {
-    localStorage.removeItem(cacheKey(year, calendars));
+    localStorage.removeItem(cacheKey(year, calendar));
   } catch {
     // ignore
   }
@@ -74,28 +72,30 @@ export function clearAllEventCaches() {
   }
 }
 
+export async function fetchCalendarYearEvents(year: number, calendar: CalendarInfo): Promise<CalendarEvent[]> {
+  try {
+    const events = await fetchAndParseIcal(calendar.url, calendar.id, calendar.title, calendar.color);
+
+    return events.filter(e => {
+      const s = new Date(e.start);
+      const end = new Date(e.end);
+      return s.getFullYear() === year || end.getFullYear() === year;
+    });
+  } catch (e) {
+    console.error(`Failed to fetch calendar ${calendar.title}`, e);
+    return [];
+  }
+}
+
+/**
+ * @deprecated Use fetchCalendarYearEvents instead
+ */
 export async function fetchYearEvents(year: number, calendars: CalendarInfo[]): Promise<CalendarEvent[]> {
   if (calendars.length === 0) return [];
 
   let allEvents: CalendarEvent[] = [];
 
-  // Parallel fetch
-  const promises = calendars.map(async (cal) => {
-    try {
-      const events = await fetchAndParseIcal(cal.url, cal.id, cal.title, cal.color);
-
-      return events.filter(e => {
-        const s = new Date(e.start);
-        const end = new Date(e.end);
-        return s.getFullYear() === year || end.getFullYear() === year;
-      });
-
-    } catch (e) {
-      console.error(`Failed to fetch calendar ${cal.title}`, e);
-      return [];
-    }
-  });
-
+  const promises = calendars.map(cal => fetchCalendarYearEvents(year, cal));
   const results = await Promise.all(promises);
   results.forEach(arr => allEvents = allEvents.concat(arr));
 

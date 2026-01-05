@@ -1,5 +1,7 @@
 # Panorama Calendar for Obsidian
 
+![Panorama Calendar Interface](./preview.png)
+
 Panorama Calendar allows you to view your .ical calendars in a yearly (linear) view.
 It makes it easier to think of a full year of events in either month-by-month, linear or cyclical way.
 

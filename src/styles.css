@@ -1,0 +1,66 @@
+.panorama-calendar-view {
+    @tailwind base;
+    @tailwind components;
+    @tailwind utilities;
+
+    /* Scoped Reset for Borders (since preflight is disabled) */
+    &,
+    & *,
+    & *::before,
+    & *::after {
+        border-style: solid;
+        border-width: 0;
+        border-color: #cbd5e1;
+        /* slate-300 - more visible than 200 */
+    }
+
+    /* Custom Obsidian Overrides */
+    input[type="date"],
+    input[type="time"] {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    button {
+        background-color: transparent;
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        margin: 0;
+        font-size: inherit;
+        line-height: inherit;
+        height: auto;
+        cursor: pointer;
+
+        &:hover {
+            background-color: transparent;
+        }
+    }
+
+    /* Ensure specific borders are visible and colored correctly */
+    .grid {
+        border-color: #cbd5e1 !important;
+        /* slate-300 */
+    }
+
+    [class*="border-r"] {
+        border-right-width: 1px !important;
+        border-right-color: #cbd5e1 !important;
+    }
+
+    [class*="border-b"] {
+        border-bottom-width: 1px !important;
+        border-bottom-color: #cbd5e1 !important;
+    }
+
+    [class*="border-l"] {
+        border-left-width: 1px !important;
+        border-left-color: #cbd5e1 !important;
+    }
+
+    [class*="border-t"] {
+        border-top-width: 1px !important;
+        border-top-color: #cbd5e1 !important;
+    }
+}

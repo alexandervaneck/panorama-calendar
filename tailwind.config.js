@@ -2,6 +2,7 @@
 module.exports = {
     content: [
         "./src/**/*.{js,ts,jsx,tsx}",
+        "./*.ts",
     ],
     theme: {
         extend: {
@@ -9,6 +10,9 @@ module.exports = {
                 sans: ['Inter', 'sans-serif'],
             },
         },
+    },
+    corePlugins: {
+        preflight: false,
     },
     plugins: [],
 }

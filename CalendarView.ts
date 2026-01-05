@@ -31,7 +31,7 @@ export class CalendarView extends ItemView {
         const container = this.containerEl.children[1];
         container.empty();
         this.root = createRoot(this.containerEl.children[1]);
-        this.containerEl.addClass('annual-linear-calendar-view');
+        this.containerEl.addClass('panorama-calendar-view');
         // Passing plugin instance to App for accessing settings/storage
         this.root.render(React.createElement(App, { plugin: this.plugin }));
     }
