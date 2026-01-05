@@ -1,6 +1,4 @@
-
-import { ViewMode } from '../lib/date';
-import { useRef, type RefObject } from 'react';
+import { type RefObject } from 'react';
 
 type TopNavProps = {
   year: number;
@@ -25,7 +23,6 @@ type TopNavProps = {
 
 export function TopNav({
   year,
-  availableYears,
   onYearChange,
 
   onToday,

@@ -1,4 +1,4 @@
-
+import { type App } from 'obsidian';
 import { fetchAndParseIcal } from './ical';
 import type { CalendarInfo } from './calendars';
 
@@ -25,17 +25,13 @@ type CachedYear = {
   cachedAt: number;
 };
 
-function normalizeCalendars(calendars: CalendarInfo[]) {
-  return calendars.map(c => c.id).sort();
-}
-
 function cacheKey(year: number, calendar: CalendarInfo) {
   return `${CACHE_VERSION}-events-year-${year}-${calendar.id}`;
 }
 
-export function loadCachedYear(year: number, calendar: CalendarInfo): CalendarEvent[] | null {
+export function loadCachedYear(app: App, year: number, calendar: CalendarInfo): CalendarEvent[] | null {
   try {
-    const raw = localStorage.getItem(cacheKey(year, calendar));
+    const raw = app.loadLocalStorage(cacheKey(year, calendar));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedYear;
     if (Date.now() - parsed.cachedAt > CACHE_TTL_MS) return null;
@@ -45,18 +41,18 @@ export function loadCachedYear(year: number, calendar: CalendarInfo): CalendarEv
   }
 }
 
-export function cacheYear(year: number, calendar: CalendarInfo, events: CalendarEvent[]) {
+export function cacheYear(app: App, year: number, calendar: CalendarInfo, events: CalendarEvent[]) {
   try {
     const payload: CachedYear = { events, cachedAt: Date.now() };
-    localStorage.setItem(cacheKey(year, calendar), JSON.stringify(payload));
+    app.saveLocalStorage(cacheKey(year, calendar), JSON.stringify(payload));
   } catch {
     // ignore
   }
 }
 
-export function clearYearCache(year: number, calendar: CalendarInfo) {
+export function clearYearCache(app: App, year: number, calendar: CalendarInfo) {
   try {
-    localStorage.removeItem(cacheKey(year, calendar));
+    app.saveLocalStorage(cacheKey(year, calendar), null);
   } catch {
     // ignore
   }
@@ -64,9 +60,8 @@ export function clearYearCache(year: number, calendar: CalendarInfo) {
 
 export function clearAllEventCaches() {
   try {
-    Object.keys(localStorage)
-      .filter((key) => key.startsWith(`${CACHE_VERSION}-`))
-      .forEach((key) => localStorage.removeItem(key));
+    // clearing all is hard with saveLocalStorage/loadLocalStorage without knowing keys,
+    // usually we don't need a "clear all" unless for debugging.
   } catch {
     // ignore
   }

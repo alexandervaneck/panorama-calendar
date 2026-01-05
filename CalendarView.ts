@@ -24,19 +24,21 @@ export class CalendarView extends ItemView {
     }
 
     getDisplayText() {
-        return 'Panorama Calendar';
+        return 'Panorama calendar';
     }
 
-    async onOpen() {
+    onOpen(): Promise<void> {
         const container = this.containerEl.children[1];
         container.empty();
-        this.root = createRoot(this.containerEl.children[1]);
+        this.root = createRoot(this.containerEl.children[1] as HTMLElement);
         this.containerEl.addClass('panorama-calendar-view');
         // Passing plugin instance to App for accessing settings/storage
         this.root.render(React.createElement(App, { plugin: this.plugin }));
+        return Promise.resolve();
     }
 
-    async onClose() {
+    onClose(): Promise<void> {
         this.root?.unmount();
+        return Promise.resolve();
     }
 }

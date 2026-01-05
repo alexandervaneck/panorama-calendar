@@ -68,7 +68,7 @@ export const getQuarterStructure = (year: number): CycleRow[] => {
   const startOfYear = getISOYearStart(year);
   const startOfNextYear = getISOYearStart(year + 1);
 
-  let currentDate = new Date(startOfYear);
+  const currentDate = new Date(startOfYear);
 
   for (let q = 1; q <= 4; q++) {
     // 3 Cycles of 28 days

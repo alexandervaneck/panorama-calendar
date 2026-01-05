@@ -7,7 +7,8 @@
         "dev": "mkdir -p dist && node esbuild.config.mjs",
         "build:css": "postcss src/styles.css -o dist/styles.css",
         "build": "mkdir -p dist && npm run build:css && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && cp manifest.json dist/",
-        "version": "node version-bump.mjs && git add manifest.json versions.json"
+        "version": "node version-bump.mjs && git add manifest.json versions.json",
+        "lint": "eslint . --ext .ts,.tsx"
     },
     "keywords": [
         "obsidian",
@@ -24,6 +25,10 @@
         "autoprefixer": "^10.4.14",
         "builtin-modules": "3.3.0",
         "esbuild": "0.19.11",
+        "eslint": "^8.57.1",
+        "eslint-plugin-obsidian": "^2.28.0",
+        "eslint-plugin-react": "^7.37.5",
+        "eslint-plugin-react-hooks": "^7.0.1",
         "obsidian": "latest",
         "postcss": "^8.4.21",
         "postcss-cli": "^10.1.0",

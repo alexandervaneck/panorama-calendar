@@ -63,4 +63,31 @@
         border-top-width: 1px !important;
         border-top-color: #cbd5e1 !important;
     }
+
+    /* Settings Tab Styles */
+    .calendar-setting-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 10px;
+        padding: 10px;
+        background-color: var(--background-secondary);
+        border-radius: var(--radius-sm);
+    }
+
+    .calendar-setting-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .calendar-setting-color-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    .calendar-setting-name {
+        font-weight: var(--font-bold);
+    }
 }

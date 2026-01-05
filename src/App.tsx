@@ -9,17 +9,17 @@ import {
   clearYearCache,
   type CalendarEvent,
 } from './lib/events';
-import { createCalendar, type CalendarInfo } from './lib/calendars';
+import { type CalendarInfo } from './lib/calendars';
 import { ViewMode } from './lib/date';
 import { useOutsideClick } from './hooks/useOutsideClick';
 import type AnnualLinearCalendarPlugin from '../main';
+import React from 'react';
 
 const currentYear = new Date().getFullYear();
 const currentMonthIndex = new Date().getMonth();
 
 export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | undefined }) {
   // Initialize state from plugin settings or defaults
-  // If plugin is undefined (e.g. dev outside obsidian), fallback to defaults.
   const [year, setYear] = useState(plugin?.settings?.year ?? currentYear);
   const [viewMode, setViewMode] = useState<ViewMode>(plugin?.settings?.viewMode ?? 'date-grid');
   const [calendars, setCalendars] = useState<CalendarInfo[]>(plugin?.settings?.calendars ?? []);
@@ -36,7 +36,6 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [calendarMenuOpen, setCalendarMenuOpen] = useState(false);
-  const [calendarsLoading, setCalendarsLoading] = useState(false);
 
   // Sync state changes to plugin settings
   const persistSettings = async (updates: Partial<{
@@ -47,11 +46,12 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
   }>) => {
     if (!plugin) return;
 
-    plugin.settings = {
-      ...plugin.settings,
-      ...updates
-    };
+    Object.assign(plugin.settings, updates);
     await plugin.saveSettings();
+  };
+
+  const syncSettings = (updates: Parameters<typeof persistSettings>[0]) => {
+    void persistSettings(updates);
   };
 
 
@@ -63,8 +63,6 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
   const activeCalendarInfos = useMemo(() => {
     return calendars.filter(c => selectedCalendars.includes(c.id));
   }, [calendars, selectedCalendars]);
-
-
 
   const yearOptions = useMemo(() => {
     const start = currentYear - 5;
@@ -79,21 +77,16 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
       setYear(plugin.settings.year);
       setViewMode(plugin.settings.viewMode);
       setCalendars([...plugin.settings.calendars]);
-      // Ensure selected calendars are also synced if they change externally (e.g. deletion)
       setSelectedCalendars([...plugin.settings.selectedCalendars]);
     });
     return cleanup;
   }, [plugin]);
 
   const handleToday = () => {
-    if (year !== currentYear) {
-      setYear(currentYear);
-      persistSettings({ year: currentYear });
-    }
+    setYear(currentYear);
+    syncSettings({ year: currentYear });
     setScrollTargetMonth(currentMonthIndex);
   };
-
-  // Removed handleAddCalendar and handleRemoveCalendar as they are now in Settings Tab
 
   useEffect(() => {
     if (scrollTargetMonth === null) return;
@@ -101,11 +94,13 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting month scroll after navigation
     setScrollTargetMonth(null);
   }, [scrollTargetMonth, year, viewMode]);
 
   useEffect(() => {
     if (selectedEvent) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync panel state with selected event
       setPanelEvent(selectedEvent);
       return undefined;
     }
@@ -146,8 +141,7 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
   }, [panelEvent]);
 
   useEffect(() => {
-    // If active calendars changed, we might need to fetch.
-    if (activeCalendarInfos.length === 0) {
+    if (!plugin || activeCalendarInfos.length === 0) {
       return;
     }
 
@@ -158,11 +152,9 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
       const promises = activeCalendarInfos.map(async (cal) => {
         const cacheId = `${year}-${cal.id}`;
 
-        // 1. Check state
         if (eventsByYear[cacheId]) return;
 
-        // 2. Check cache
-        const cached = loadCachedYear(year, cal);
+        const cached = loadCachedYear(plugin.app, year, cal);
         if (cached) {
           if (!canceled) {
             setEventsByYear(prev => ({ ...prev, [cacheId]: cached }));
@@ -170,11 +162,10 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
           return;
         }
 
-        // 3. Fetch
         try {
           const events = await fetchCalendarYearEvents(year, cal);
           if (!canceled) {
-            cacheYear(year, cal, events);
+            cacheYear(plugin.app, year, cal, events);
             setEventsByYear(prev => ({ ...prev, [cacheId]: events }));
           }
         } catch (error) {
@@ -189,15 +180,12 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
       }
     };
 
-    fetchMissing();
+    void fetchMissing();
 
     return () => {
       canceled = true;
     };
-  }, [year, activeCalendarInfos, eventsByYear]);
-
-
-
+  }, [year, activeCalendarInfos, eventsByYear, plugin]);
 
   const displayedEvents = useMemo(() => {
     if (!activeCalendars.length) return [];
@@ -216,7 +204,6 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
 
   const openPanel = (evt: CalendarEvent) => {
     setPanelEvent(evt);
-    // Defer setting "open" state so the translate animation can start from closed.
     requestAnimationFrame(() => setSelectedEvent(evt));
   };
 
@@ -224,16 +211,14 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
     setSelectedEvent(null);
   };
 
-  // Close calendar menu when clicking outside.
-  const calendarMenuRef = useRef<HTMLDivElement>(null!);
-  const calendarButtonRef = useRef<HTMLButtonElement>(null!);
+  const calendarMenuRef = useRef<HTMLDivElement>(null);
+  const calendarButtonRef = useRef<HTMLButtonElement>(null);
   useOutsideClick(
     [calendarMenuRef],
     () => setCalendarMenuOpen(false),
     { ignore: [calendarButtonRef], enabled: calendarMenuOpen },
   );
 
-  // Close panel when clicking outside.
   useOutsideClick([panelRef], () => setSelectedEvent(null), { enabled: !!panelEvent });
 
   return (
@@ -243,19 +228,14 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
         availableYears={yearOptions}
         onYearChange={(y) => {
           setYear(y);
-          persistSettings({ year: y });
+          syncSettings({ year: y });
         }}
-
         onToday={handleToday}
         todayYear={currentYear}
-
         calendars={calendars}
-
         selectedCalendars={selectedCalendars}
-        calendarsLoading={calendarsLoading}
         calendarMenuOpen={calendarMenuOpen}
         onToggleCalendarMenu={() => setCalendarMenuOpen((open) => !open)}
-
         onToggleCalendar={(id) => {
           setSelectedCalendars((prev) => {
             const exists = prev.includes(id);
@@ -265,33 +245,36 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
             } else {
               next = [...prev, id];
             }
-            persistSettings({ selectedCalendars: next });
+            syncSettings({ selectedCalendars: next });
             return next;
           });
         }}
-        onSync={async () => {
-          setEventsLoading(true);
-          const promises = activeCalendarInfos.map(async (cal) => {
-            const cacheId = `${year}-${cal.id}`;
-            clearYearCache(year, cal);
-            try {
-              const events = await fetchCalendarYearEvents(year, cal);
-              cacheYear(year, cal, events);
-              setEventsByYear(prev => ({ ...prev, [cacheId]: events }));
-            } catch (error) {
-              console.error(`Failed to refresh ${cal.title}`, error);
-            }
-          });
-          await Promise.all(promises);
-          setEventsLoading(false);
-          setLastSync(new Date().toISOString());
+        onSync={() => {
+          if (!plugin) return;
+          const sync = async () => {
+            setEventsLoading(true);
+            const promises = activeCalendarInfos.map(async (cal) => {
+              const cacheId = `${year}-${cal.id}`;
+              clearYearCache(plugin.app, year, cal);
+              try {
+                const events = await fetchCalendarYearEvents(year, cal);
+                cacheYear(plugin.app, year, cal, events);
+                setEventsByYear(prev => ({ ...prev, [cacheId]: events }));
+              } catch (error) {
+                console.error(`Failed to refresh ${cal.title}`, error);
+              }
+            });
+            await Promise.all(promises);
+            setEventsLoading(false);
+            setLastSync(new Date().toISOString());
+          };
+          void sync();
         }}
         onOpenSettings={() => plugin?.openSettings()}
         isSyncing={eventsLoading}
         calendarMenuRef={calendarMenuRef}
         calendarButtonRef={calendarButtonRef}
       />
-
 
       <div className="px-4 pt-2 text-[10px] text-slate-500 flex justify-end">
         {lastSync ? (
@@ -410,7 +393,7 @@ export default function App({ plugin }: { plugin: AnnualLinearCalendarPlugin | u
   );
 }
 
-function DateRow({ label, value, showTime }: { label: string; value: string; showTime?: boolean }) {
+function DateRow({ value, showTime }: { label: string; value: string; showTime?: boolean }) {
   const date = new Date(value);
   const parsedDate = typeof value === 'string' ? value.slice(0, 10) : '';
   const isValid = !Number.isNaN(date.getTime());

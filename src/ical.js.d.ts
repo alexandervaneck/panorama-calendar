@@ -1,13 +1,18 @@
 
 declare module 'ical.js' {
     export class Component {
-        constructor(jcal: any[] | string);
+        constructor(jcal: unknown[] | string);
         getAllSubcomponents(name: string): Component[];
-        getFirstPropertyValue(name: string): any;
+        getFirstPropertyValue(name: string): unknown;
+        getFirstProperty(name: string): Property | null;
+    }
+
+    export class Property {
+        getFirstValue(): unknown;
     }
 
     export class Event {
-        constructor(component: Component | any);
+        constructor(component: Component);
         uid: string;
         summary: string;
         description: string;
@@ -27,5 +32,5 @@ declare module 'ical.js' {
 
     }
 
-    export function parse(input: string): any[];
+    export function parse(input: string): unknown[];
 }

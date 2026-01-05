@@ -14,7 +14,6 @@ export async function fetchCalendarMetadata(url: string): Promise<{ title: strin
 
     const jcalData = ICAL.parse(text);
     const comp = new ICAL.Component(jcalData);
-    // @ts-ignore - types are incomplete
     const title = comp.getFirstProperty('x-wr-calname')?.getFirstValue() as string | null;
 
     return { title: title || null };
@@ -44,7 +43,7 @@ export async function fetchAndParseIcal(url: string, calendarId: string, calenda
     const comp = new ICAL.Component(jcalData);
     const vevents = comp.getAllSubcomponents('vevent');
 
-    return vevents.map((vevent: any) => {
+    return vevents.map((vevent: ICAL.Component) => {
       const event = new ICAL.Event(vevent);
 
       const uid = event.uid;
@@ -52,12 +51,11 @@ export async function fetchAndParseIcal(url: string, calendarId: string, calenda
       const description = event.description;
       const location = event.location;
       // Access URL from the underlying component (vevent)
-      // @ts-ignore
       const htmlLink = vevent.getFirstProperty('url')?.getFirstValue();
 
       // Handle Start Date
-      let start = event.startDate;
-      let end = event.endDate;
+      const start = event.startDate;
+      const end = event.endDate;
       let allDay = false;
 
       // Check if it's an all-day event (isDate is true if it's just a date without time)

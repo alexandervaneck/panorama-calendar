@@ -501,7 +501,6 @@ function CyclicalRow({
 
           const dayNum = current.getDate();
           const monthIdx = current.getMonth();
-          const isCurrentMonth = true; // Always show valid date
           const weekday = current.getDay();
           const weekend = isWeekend(weekday);
           const isTodayDate = isToday(year, monthIdx, dayNum);
@@ -638,10 +637,10 @@ function buildSegments(
   for (const seg of sorted) {
     const { xStart, width } =
       viewMode === 'date-grid'
-        ? positionDateGrid(seg, monthStart)
+        ? positionDateGrid(seg)
         : viewMode === 'cyclical'
           ? positionCyclical(seg, monthStart)
-          : positionFixedWeek(seg, monthStart, weekStart, fixedColumns ?? 0);
+          : positionFixedWeek(seg, monthStart, weekStart);
 
     let laneIndex = 0;
     while (laneIndex < lanes.length && xStart <= lanes[laneIndex]) {
@@ -668,8 +667,7 @@ function buildSegments(
 }
 
 function positionDateGrid(
-  seg: { startDate: Date; endDate: Date },
-  monthStart: Date,
+  seg: { startDate: Date; endDate: Date }
 ): { xStart: number; width: number } {
   const xStart = seg.startDate.getDate() - 1;
   const xEnd = seg.endDate.getDate() - 1;
@@ -679,8 +677,7 @@ function positionDateGrid(
 function positionFixedWeek(
   seg: { startDate: Date; endDate: Date },
   monthStart: Date,
-  weekStart: number,
-  columns: number,
+  weekStart: number
 ): { xStart: number; width: number } {
   const offset = weekdayOffset(monthStart.getFullYear(), monthStart.getMonth(), weekStart);
   const xStart = offset + seg.startDate.getDate() - 1;

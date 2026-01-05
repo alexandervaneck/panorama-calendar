@@ -1,5 +1,4 @@
-
-import { App, Plugin, WorkspaceLeaf, addIcon } from 'obsidian';
+import { Plugin, WorkspaceLeaf, addIcon } from 'obsidian';
 import { CalendarView, CALENDAR_VIEW_TYPE } from './CalendarView';
 import { CalendarSettingTab } from './CalendarSettingTab';
 
@@ -39,26 +38,24 @@ export default class AnnualLinearCalendarPlugin extends Plugin {
 
         // Add Ribbon Icon to open view
         this.addRibbonIcon('panorama-icon', 'Open Panorama Calendar', () => {
-            this.activateView();
+            void this.activateView();
         });
 
         // Add Command to open view
         this.addCommand({
             id: 'open-calendar-view',
-            name: 'Open Panorama Calendar',
+            name: 'Open',
             callback: () => {
-                this.activateView();
+                void this.activateView();
             }
         });
 
         // Add Settings Tab
         this.addSettingTab(new CalendarSettingTab(this.app, this));
-
-        console.log('Panorama Calendar Plugin loaded');
     }
 
     onunload() {
-        console.log('Panorama Calendar Plugin unloaded');
+        // No cleanup needed
     }
 
     async activateView() {
@@ -80,7 +77,7 @@ export default class AnnualLinearCalendarPlugin extends Plugin {
         }
 
         // "Reveal" the leaf in case it is in a collapsed sidebar
-        workspace.revealLeaf(leaf);
+        await workspace.revealLeaf(leaf);
     }
 
     async loadSettings() {
@@ -104,7 +101,7 @@ export default class AnnualLinearCalendarPlugin extends Plugin {
     }
 
     openSettings() {
-        // @ts-ignore - Internal Obsidian API
+        // @ts-expect-error - Internal Obsidian API
         const setting = this.app.setting;
         setting.open();
         setting.openTabById(this.manifest.id);
